@@ -7,18 +7,12 @@ from datetime import datetime
 
 # Settings dictionary for easy customization
 settings = {
-    'resolution': (1920, 1080),  # 1080p resolution, compatible with Camera Module 3
-    'framerate': 30,             # 30 fps, a usable preset for Camera Module 3
-    'duration': 30,              # Duration of each clip in minutes
+    'resolution': (1920, 1080),  # 1080p resolution
+    'framerate': 30,             # 30 fps
+    'duration': 1,               # Duration of each clip in minutes (set to 1 for testing)
     'output_dir': '/home/pi/videos',  # Directory to store videos
     'retention_days': 1          # Keep videos for 1 day
 }
-
-# Supported settings for Camera Module 3:
-# - 1920x1080 @ 30fps
-# - 1280x720 @ 60fps
-# - 640x480 @ 60fps
-# Adjust 'resolution' and 'framerate' above as needed
 
 # Ensure the output directory exists
 if not os.path.exists(settings['output_dir']):
@@ -38,32 +32,40 @@ def delete_old_files(directory, retention_days):
     """Delete MP4 files older than the retention period."""
     now = time.time()
     cutoff = now - (retention_days * 86400)  # Convert days to seconds
+    deleted_count = 0
     for filename in os.listdir(directory):
         if filename.endswith('.mp4'):
             filepath = os.path.join(directory, filename)
             mtime = os.path.getmtime(filepath)
             if mtime < cutoff:
                 os.remove(filepath)
-                print(f"Deleted old file: {filename}")
+                deleted_count += 1
+    print(f"Deleted {deleted_count} old files")
 
 # Main recording loop
 while True:
-    # Clean up old files
-    delete_old_files(settings['output_dir'], settings['retention_days'])
-    
-    # Generate filename and full path
-    filename = generate_filename()
-    filepath = os.path.join(settings['output_dir'], filename)
-    
-    # Start recording
-    print(f"Starting recording to {filepath}")
-    encoder = H264Encoder()
-    output = FfmpegOutput(filepath)
-    picam2.start_recording(encoder, output)
-    
-    # Record for the specified duration
-    time.sleep(settings['duration'] * 60)  # Convert minutes to seconds
-    
-    # Stop recording
-    picam2.stop_recording()
-    print(f"Finished recording to {filepath}")
+    try:
+        # Clean up old files
+        print("Checking for old files to delete...")
+        delete_old_files(settings['output_dir'], settings['retention_days'])
+        
+        # Generate filename and full path
+        filename = generate_filename()
+        filepath = os.path.join(settings['output_dir'], filename)
+        
+        # Start recording
+        print(f"Starting recording to {filepath} at {datetime.now()}")
+        encoder = H264Encoder()
+        output = FfmpegOutput(filepath)
+        picam2.start_recording(encoder, output)
+        
+        # Record for the specified duration
+        time.sleep(settings['duration'] * 60)  # Convert minutes to seconds
+        
+        # Stop recording
+        picam2.stop_recording()
+        print(f"Finished recording to {filepath} at {datetime.now()}")
+        
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        break  # Stop on error for debugging; remove 'break' to continue after errors
