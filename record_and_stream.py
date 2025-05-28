@@ -1,100 +1,69 @@
-import os
-import json
-from datetime import datetime, timedelta
 from picamera2 import Picamera2
-from picamera2.encoders import H264Encoder, MJPEGEncoder
-from picamera2.outputs import FfmpegOutput, CircularOutput
+from picamera2.encoders import H264Encoder
+from picamera2.outputs import FfmpegOutput
+import os
 import time
-import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from datetime import datetime
 
-# Load configuration
-with open('config.json', 'r') as f:
-    config = json.load(f)
+# Settings dictionary for easy customization
+settings = {
+    'resolution': (1920, 1080),  # 1080p resolution, compatible with Camera Module 3
+    'framerate': 30,             # 30 fps, a usable preset for Camera Module 3
+    'duration': 30,              # Duration of each clip in minutes
+    'output_dir': '/home/pi/videos',  # Directory to store videos
+    'retention_days': 1          # Keep videos for 1 day
+}
 
-# Camera settings
-resolution = tuple(config['resolution'])
-frame_rate = config['frame_rate']
-clip_duration = config['clip_duration']  # in seconds
-output_dir = config['output_dir']
-stream_port = config['stream_port']
+# Supported settings for Camera Module 3:
+# - 1920x1080 @ 30fps
+# - 1280x720 @ 60fps
+# - 640x480 @ 60fps
+# Adjust 'resolution' and 'framerate' above as needed
 
-# Ensure output directory exists
-os.makedirs(output_dir, exist_ok=True)
+# Ensure the output directory exists
+if not os.path.exists(settings['output_dir']):
+    os.makedirs(settings['output_dir'])
 
-# Initialize camera
+# Initialize and configure the camera
 picam2 = Picamera2()
-video_config = picam2.create_video_configuration(main={"size": resolution}, lores={"size": (640, 480)})
+video_config = picam2.create_video_configuration(main={"size": settings['resolution']}, controls={"FrameRate": settings['framerate']})
 picam2.configure(video_config)
-picam2.set_controls({"FrameRate": frame_rate})
 
-# Streaming setup using lores stream
-stream_output = CircularOutput()
-picam2.start_recording(MJPEGEncoder(), stream_output, name="lores")
-
-# HTTP server for streaming
-class StreamingHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        if self.path == '/stream.mjpg':
-            self.send_response(200)
-            self.send_header('Content-type', 'multipart/x-mixed-replace; boundary=--jpgboundary')
-            self.end_headers()
-            while True:
-                try:
-                    frame = stream_output.get()
-                    self.wfile.write(b'--jpgboundary\r\n')
-                    self.send_header('Content-type', 'image/jpeg')
-                    self.send_header('Content-length', str(len(frame)))
-                    self.end_headers()
-                    self.wfile.write(frame)
-                    self.wfile.write(b'\r\n')
-                except Exception as e:
-                    break
-        else:
-            self.send_response(404)
-            self.end_headers()
-
-def start_streaming_server():
-    server = HTTPServer(('', stream_port), StreamingHandler)
-    server.serve_forever()
-
-# Start streaming server in a separate thread
-threading.Thread(target=start_streaming_server, daemon=True).start()
-
-# Function to generate filename with timestamp
 def generate_filename():
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return os.path.join(output_dir, f"video_{timestamp}.mp4")
+    """Generate a filename with the current date and time."""
+    now = datetime.now()
+    return now.strftime("%Y%m%d_%H%M%S") + '.mp4'
 
-# Function to record a clip
-def record_clip(duration):
-    filename = generate_filename()
-    encoder = H264Encoder()
-    output = FfmpegOutput(filename)
-    picam2.start_recording(encoder, output, name="main")
-    time.sleep(duration)
-    picam2.stop_recording(name="main")
-
-# Function to manage storage
-def manage_storage():
-    while True:
-        now = datetime.now()
-        for filename in os.listdir(output_dir):
-            if filename.endswith(".mp4"):
-                file_path = os.path.join(output_dir, filename)
-                # Extract timestamp from filename
-                try:
-                    timestamp_str = filename.split('_')[1].split('.')[0]
-                    file_time = datetime.strptime(timestamp_str, "%Y%m%d_%H%M%S")
-                    if now - file_time > timedelta(days=1):
-                        os.remove(file_path)
-                except Exception as e:
-                    print(f"Error processing {filename}: {e}")
-        time.sleep(3600)  # Check every hour
-
-# Start storage management in a separate thread
-threading.Thread(target=manage_storage, daemon=True).start()
+def delete_old_files(directory, retention_days):
+    """Delete MP4 files older than the retention period."""
+    now = time.time()
+    cutoff = now - (retention_days * 86400)  # Convert days to seconds
+    for filename in os.listdir(directory):
+        if filename.endswith('.mp4'):
+            filepath = os.path.join(directory, filename)
+            mtime = os.path.getmtime(filepath)
+            if mtime < cutoff:
+                os.remove(filepath)
+                print(f"Deleted old file: {filename}")
 
 # Main recording loop
 while True:
-    record_clip(clip_duration)
+    # Clean up old files
+    delete_old_files(settings['output_dir'], settings['retention_days'])
+    
+    # Generate filename and full path
+    filename = generate_filename()
+    filepath = os.path.join(settings['output_dir'], filename)
+    
+    # Start recording
+    print(f"Starting recording to {filepath}")
+    encoder = H264Encoder()
+    output = FfmpegOutput(filepath)
+    picam2.start_recording(encoder, output)
+    
+    # Record for the specified duration
+    time.sleep(settings['duration'] * 60)  # Convert minutes to seconds
+    
+    # Stop recording
+    picam2.stop_recording()
+    print(f"Finished recording to {filepath}")
