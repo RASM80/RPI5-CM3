@@ -1,0 +1,7 @@
+{
+    "resolution": [1920, 1080],
+    "frame_rate": 30,
+    "clip_duration": 1800,
+    "output_dir": "/home/pi/videos",
+    "stream_port": 8000
+}
