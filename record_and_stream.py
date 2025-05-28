@@ -8,9 +8,9 @@ from datetime import datetime
 # Settings
 settings = {
     'resolution': (1920, 1080),
-    'framerate': 30,
+    'framerate': 15,
     'duration': 30,  # minutes
-    'output_dir': '/home/pi/videos',
+    'output_dir': '/home/admin/videos',
     'retention_days': 1
 }
 
@@ -58,7 +58,7 @@ while True:
         
         # Wait for the duration
         print(f"Sleeping for {settings['duration']} minutes...")
-        time.sleep(settings['duration'] * 60)
+        time.sleep(settings['duration'] * 60 - 5)
         print("Sleep complete.")
         
         # Stop recording and clean up
