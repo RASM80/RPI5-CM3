@@ -11,7 +11,7 @@ settings = {
     'resolution': (1920, 1080),  # Compatible resolution for video with HDR
     'framerate': 15,            # Frames per second
     'duration': 1,             # Recording duration in minutes per clip
-    'output_dir': '/home/pi/videos',  # Directory to save video files
+    'output_dir': '/home/admin/videos',  # Directory to save video files
     'retention_days': 1         # Number of days to retain video files
 }
 
